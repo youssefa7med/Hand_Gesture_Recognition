@@ -125,4 +125,4 @@ See the full license details in the [LICENSE](LICENSE) file.
 
 ---
 
-[![GitHub Stars](https://img.shields.io/github/stars/YOUR_USERNAME/FaceAuth?style=for-the-badge)](https://github.com/YOUR_USERNAME/FaceAuth)
+
