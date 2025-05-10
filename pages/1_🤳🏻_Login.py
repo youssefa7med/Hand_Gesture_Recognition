@@ -64,8 +64,8 @@ def load_registered_users():
 def login_user(camera_index):
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
-        return None, "camera_error"  # إرجاع سبب الخطأ
-    
+        return None, "camera_error"
+
     users = load_registered_users()
     model = YOLO(model_path)
     classNames = ["fake", "real"]
