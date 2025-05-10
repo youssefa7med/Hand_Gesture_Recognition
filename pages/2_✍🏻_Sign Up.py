@@ -15,12 +15,9 @@ def load_lottiefile(filepath: str):
     with open(filepath, "r") as f:
         return json.load(f)
 
-
 ########################################################################################
 
-
 def load_registered_users():
-    # Load all the registered user data (encodings)
     users = {}
     if os.path.exists(FACES_DIR):
         for file in os.listdir(FACES_DIR):
@@ -30,12 +27,9 @@ def load_registered_users():
                     users[user_data['name']] = np.array(user_data['encoding'])
     return users
 
-
 ########################################################################################
 
-
 def is_face_registered(face_encoding):
-    # Check if the face is already registered by comparing encodings
     registered_users = load_registered_users()
     for user, encoding in registered_users.items():
         matches = face_recognition.compare_faces([encoding], face_encoding)
@@ -43,93 +37,85 @@ def is_face_registered(face_encoding):
             return True
     return False
 
-
 ########################################################################################
 
-
-def register_user(camera_index, name, visa_number, expiration_month, expiration_year, cvv):
-    cap = cv2.VideoCapture(camera_index)
-    if not cap.isOpened():
-        st.error("Camera not found. Please check your camera connection.")
-        return
-    st.info("Please look at the camera and press 'v' to capture your face.")
+def register_user(name, visa_number, expiration_month, expiration_year, cvv):
+    st.info("Please look at the camera and click the 'Capture Photo' button below.")
     
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            st.error("Failed to capture image.")
-            break
+    img_file_buffer = st.camera_input("Take a photo for registration")
+    
+    if img_file_buffer is not None:
+        img = cv2.imdecode(np.frombuffer(img_file_buffer.getvalue(), np.uint8), cv2.IMREAD_COLOR)
+        
+        face_locations = face_recognition.face_locations(img)
+        if not face_locations:
+            st.error("No face detected. Please try again.")
+            return False
 
-        cv2.imshow("Sign Up - Face Capture", frame)
-        if cv2.waitKey(1) & 0xFF == ord('v'):
-            face_locations = face_recognition.face_locations(frame)
-            if not face_locations:
-                st.warning("No face detected. Try again.")
-                continue
-            face_encoding = face_recognition.face_encodings(frame, face_locations)[0]
+        face_encoding = face_recognition.face_encodings(img, face_locations)[0]
 
-            # Check if face is already registered
-            if is_face_registered(face_encoding):
-                st.error("⚠️ This face is already registered with another name.")
-                break
+        if is_face_registered(face_encoding):
+            st.error("⚠️ This face is already registered with another name.")
+            return False
 
-            expiration_date = f"{expiration_month}/{expiration_year}"
-            user_data = {
-                "name": name,
-                "visa_number": visa_number,
-                "expiration_date": expiration_date,
-                "cvv": cvv,
-                "encoding": face_encoding.tolist()
-            }
-            if not os.path.exists(FACES_DIR):
-                os.makedirs(FACES_DIR)
-            with open(os.path.join(FACES_DIR, f"{name}.json"), "w") as f:
-                json.dump(user_data, f)
-            cv2.imwrite(os.path.join(FACES_DIR, f"{name}.jpg"), frame)
-            st.success(f"{name} has been registered successfully.")
-            break
-    cap.release()
-    cv2.destroyAllWindows()
-
+        expiration_date = f"{expiration_month}/{expiration_year}"
+        user_data = {
+            "name": name,
+            "visa_number": visa_number,
+            "expiration_date": expiration_date,
+            "cvv": cvv,
+            "encoding": face_encoding.tolist()
+        }
+        
+        if not os.path.exists(FACES_DIR):
+            os.makedirs(FACES_DIR)
+            
+        with open(os.path.join(FACES_DIR, f"{name}.json"), "w") as f:
+            json.dump(user_data, f)
+            
+        cv2.imwrite(os.path.join(FACES_DIR, f"{name}.jpg"), img)
+        st.success(f"✅ {name} has been registered successfully!")
+        return True
+    
+    return False
 
 ########################################################################################
-
 
 def main():
     st.set_page_config(page_title="Sign Up", layout="centered")
     st.title("📝 Register a New User")
 
-    lottie_animation = load_lottiefile(Login_Animation_file)
+    lottie_animation = load_lottiefile(str(Login_Animation_file))
     st_lottie(lottie_animation, height=200)
 
-    # Hardcoded list of available cameras (or can be dynamically generated if needed)
-    available_cameras = [0, 1, 2, 3]  # Example camera indexes, modify based on your setup
-
-    # Selectbox for the user to select a camera
-    camera_index = st.selectbox("Select Camera", available_cameras, index=0)
-
-    name = st.text_input("Please enter your full name.")
-    visa_number = st.text_input("Visa Number (16 digits)", type="password")
-    col1, col2 = st.columns(2)
-    with col1:
-        expiration_month = st.text_input("Expiration Month (MM)")
-    with col2:
-        expiration_year = st.text_input("Expiration Year (YY)")
-    cvv = st.text_input("CVV (3 digits)", type="password")
-
-    if st.button("Register"):
-        if len(name.strip().split()) < 3:
-            st.error("⚠️ Full name must be at least 3 words.")
-        elif len(visa_number) != 16 or not visa_number.isdigit():
-            st.error("⚠️ Invalid Visa number. Must be 16 digits.")
-        elif len(expiration_month) != 2 or not expiration_month.isdigit():
-            st.error("⚠️ Invalid month. Must be 2 digits.")
-        elif len(expiration_year) != 2 or not expiration_year.isdigit():
-            st.error("⚠️ Invalid year. Must be 2 digits.")
-        elif len(cvv) != 3 or not cvv.isdigit():
-            st.error("⚠️ Invalid CVV. Must be 3 digits.")
-        else:
-            register_user(camera_index, name, visa_number, expiration_month, expiration_year, cvv)
+    with st.form("registration_form"):
+        name = st.text_input("Full Name (at least 3 words)")
+        visa_number = st.text_input("Visa Number (16 digits)", type="password", max_chars=16)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            expiration_month = st.text_input("Expiration Month (MM)", max_chars=2)
+        with col2:
+            expiration_year = st.text_input("Expiration Year (YY)", max_chars=2)
+            
+        cvv = st.text_input("CVV (3 digits)", type="password", max_chars=3)
+        
+        submitted = st.form_submit_button("Register")
+        
+        if submitted:
+            if len(name.strip().split()) < 3:
+                st.error("⚠️ Full name must be at least 3 words.")
+            elif len(visa_number) != 16 or not visa_number.isdigit():
+                st.error("⚠️ Invalid Visa number. Must be 16 digits.")
+            elif len(expiration_month) != 2 or not expiration_month.isdigit():
+                st.error("⚠️ Invalid month. Must be 2 digits (01-12).")
+            elif len(expiration_year) != 2 or not expiration_year.isdigit():
+                st.error("⚠️ Invalid year. Must be 2 digits.")
+            elif len(cvv) != 3 or not cvv.isdigit():
+                st.error("⚠️ Invalid CVV. Must be 3 digits.")
+            else:
+                if register_user(name, visa_number, expiration_month, expiration_year, cvv):
+                    st.balloons()
 
 if __name__ == "__main__":
     main()

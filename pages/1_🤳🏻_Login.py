@@ -21,17 +21,33 @@ current_dir = Path(__file__).parent if "__file__" in locals() else Path.cwd()
 Login_Animation_file = current_dir.parent / "assets" / "Login_Animation.json"
 model_path = str(current_dir.parent / "assets" / "best.pt")
 
+st.markdown("""
+    <style>
+    .error-message {
+        color: #ff4b4b;
+        font-size: 18px;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #ff4b4b;
+    }
+    .warning-message {
+        color: #ffa421;
+        border-color: #ffa421;
+    }
+    .success-message {
+        color: #00cc00;
+        border-color: #00cc00;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 ########################################################################################
-
 
 def load_lottiefile(filepath: str):
     with open(filepath, "r") as f:
         return json.load(f)
 
-
 ########################################################################################
-
 
 def load_registered_users():
     users = {}
@@ -43,20 +59,14 @@ def load_registered_users():
                     users[user_data['name']] = np.array(user_data['encoding'])
     return users
 
-
 ########################################################################################
-
 
 def login_user(camera_index):
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
-        st.error("Camera not found. Please check your camera connection.")
-        return None
-
-    st.info("Please face the camera and press 'l' to start recognition or 'q' to quit.")
-
+        return None, "camera_error"  # إرجاع سبب الخطأ
+    
     users = load_registered_users()
-
     model = YOLO(model_path)
     classNames = ["fake", "real"]
     confidence_threshold = 0.6
@@ -64,10 +74,12 @@ def login_user(camera_index):
     while True:
         ret, frame = cap.read()
         if not ret:
-            st.error("Failed to capture image.")
-            break
+            return None, "capture_error"
 
+        frame = cv2.flip(frame, 1)
+        cv2.putText(frame, "Press L to login & Press Q to quit", (180, 350),cv2.FONT_HERSHEY_PLAIN, 1.2, (255, 255, 255), 2)
         cv2.imshow("Login - Face Capture", frame)
+
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
@@ -76,48 +88,36 @@ def login_user(camera_index):
         if key == ord('l'):
             face_locations = face_recognition.face_locations(frame)
             if not face_locations:
-                st.warning("No face detected. Press 'r' to try again or 'q' to quit.")
-                continue
-
-            face_encoding = face_recognition.face_encodings(frame, face_locations)[0]
-
+                return None, "no_face"
+            
             spoof_results = model(frame, stream=True, verbose=False)
             is_real = False
-
             for result in spoof_results:
                 for box in result.boxes:
                     conf = float(box.conf[0])
                     cls = int(box.cls[0])
-                    label = classNames[cls]
-                    if conf > confidence_threshold and label == "real":
+                    if conf > confidence_threshold and classNames[cls] == "real":
                         is_real = True
                         break
-
+            
             if not is_real:
-                st.error("Wrong face detected! Press 'r' to try again or 'q' to quit.")
-                continue
+                return None, "spoofed"
 
+            # التعرف على الوجه
+            face_encoding = face_recognition.face_encodings(frame, face_locations)[0]
             for name, encoding in users.items():
-                matches = face_recognition.compare_faces([encoding], face_encoding)
-                if any(matches):
-                    st.success(f"Welcome back, {name}!")
-                    engine = pyttsx3.init()
-                    engine.setProperty('rate', 150)
-                    engine.say(f"Welcome back, {name.split(' ')[0]}!")
-                    engine.runAndWait()
+                if face_recognition.compare_faces([encoding], face_encoding)[0]:
                     cap.release()
                     cv2.destroyAllWindows()
-                    return name
+                    return name, "success"
 
-            st.error("Face not recognized. Press 'r' to try again or 'q' to quit.")
-            continue
+            return None, "not_registered"
+
     cap.release()
     cv2.destroyAllWindows()
-    return None
-
+    return None, "unknown_error"
 
 ########################################################################################
-
 
 def start_anti_spoofing_verification(user_name):
     hand_detector = HandDetector(detectionCon=0.8, maxHands=1)
@@ -252,42 +252,127 @@ def start_anti_spoofing_verification(user_name):
     cap.release()
     cv2.destroyAllWindows()
 
-
 ########################################################################################
-
 
 def main():
     global is_logged_in, logged_in_user
 
-    st.set_page_config(page_title="Face Login System", layout="centered")
-    st.title("🔐 Welcome to the Face Recognition Login Portal")
-    st.markdown("Login securely using your **face** with AI-based anti-spoofing verification.")
-    st.markdown("Make sure you're in a well-lit environment and your camera is connected properly.")
+    st.markdown("""
+    <style>
+    .main-title {
+        font-size: 2.8rem !important;
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 25px;
+    }
+    .login-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        background: #ffffff;
+    }
+    .camera-feed {
+        border: 3px solid #3498db;
+        border-radius: 10px;
+        padding: 10px;
+        margin: 20px 0;
+    }
+    .stButton>button {
+        width: 100%;
+        padding: 15px;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        background: #3498db;
+        color: white;
+        transition: all 0.3s;
+    }
+    .stButton>button:hover {
+        background: #2980b9;
+        transform: scale(1.02);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # Load and show animation
-    lottie_animation = load_lottiefile(str(Login_Animation_file))
-    st_lottie(lottie_animation, height=250, key="login_anim")
+    with st.container():
+        st.markdown('<h1 class="main-title">🔒 Face Authentication System</h1>', unsafe_allow_html=True)
+        
+        col_anim, col_info = st.columns([2, 1])
+        with col_anim:
+            lottie_animation = load_lottiefile(str(Login_Animation_file))
+            st_lottie(lottie_animation, height=200, key="login_anim")
+        
+        with col_info:
+            st.markdown("""
+            ### Secure Login Features:
+            - 🚀 Instant face recognition
+            - 🛡️ Anti-spoofing protection
+            - 📸 Real-time verification
+            """)
 
-    st.divider()
+        st.divider()
 
-    cameras = [0, 1, 2, 3]
-    camera_index = st.selectbox("📷 Select Your Camera", cameras, index=0)
+        with st.container():
+            st.markdown("### Ready to Authenticate?")
+            if st.button("🚀 Start Face Verification", key="main_login"):
+                with st.spinner("Initializing security protocols..."):
+                    user_name, status = login_user(0)
+                    if user_name:
+                        with st.spinner("Performing deep verification..."):
+                            start_anti_spoofing_verification(user_name)
+                            st.balloons()
+                            st.session_state.logged_in = True
+                            st.success(f"✨ Welcome back, {user_name}!")
+                    else:
+                        self.handle_error(status)
 
-    st.markdown("When you're ready, click the **Login** button and press **L** to scan your face.")
+        with st.expander("ℹ️ Need Help?", expanded=False):
+            st.markdown("""
+            **Common Issues Solution:**
+            - 🧭 Position your face in center
+            - 💡 Ensure good lighting
+            - 📵 Avoid using photos/screens
+            - 🔄 Restart system if needed
+            """)
 
-    if st.button("🔓 Login"):
-        st.info("Initializing face recognition... Please allow camera access.")
-        user_name = login_user(camera_index)
-        if user_name:
-            with st.spinner("Running anti-spoofing verification..."):
-                start_anti_spoofing_verification(user_name)
-                is_logged_in = True
-                logged_in_user = user_name
-                st.success(f"✅ {user_name}, you are now logged in successfully!")
-                # st.balloons()
-        else:
-            st.warning("❌ Login failed. Make sure you're registered and not using a spoofed face.")
+def handle_error(self, status):
+    error_config = {
+        "not_registered": {
+            "icon": "🆔",
+            "message": "Unregistered Identity Detected",
+            "solution": "Please complete registration first"
+        },
+        "spoofed": {
+            "icon": "🕵️",
+            "message": "Spoofing Attempt Blocked!",
+            "solution": "Use real face for authentication"
+        },
+        "no_face": {
+            "icon": "👤",
+            "message": "No Face Detected",
+            "solution": "Adjust position and try again"
+        },
+        "camera_error": {
+            "icon": "📷",
+            "message": "Camera Connection Failed",
+            "solution": "Check hardware connections"
+        }
+    }
+    
+    error_data = error_config.get(status, {
+        "icon": "❌",
+        "message": "Authentication Failed",
+        "solution": "Unknown error occurred"
+    })
 
+    with st.container():
+        st.markdown(f"""
+        <div style="border-left: 4px solid #e74c3c; padding: 15px; background: #fdedec; border-radius: 5px; margin: 20px 0;">
+            <h3>{error_data['icon']} {error_data['message']}</h3>
+            <p>{error_data['solution']}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
