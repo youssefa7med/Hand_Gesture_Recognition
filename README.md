@@ -2,6 +2,8 @@
 
 A modern, AI-powered face recognition system with anti-spoofing capabilities, built using cutting-edge technologies for secure and efficient authentication.
 
+![System Demo](https://www.bing.com/th/id/OGC.70ce94cc2a1ba1840824f847083eb506?pid=1.7&rurl=https%3a%2f%2fcdn.dribbble.com%2fusers%2f1637182%2fscreenshots%2f4904044%2fmedia%2f9521d26934e59e64c3f5efe711fb6f10.gif&ehk=EarpONZMtxg2YuTfqrCpvatq4xz1dy3R4MWbgzCKTGU%3d)
+
 ![Python Version](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8%2B-green)
